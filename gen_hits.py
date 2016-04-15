@@ -45,7 +45,99 @@ def extract_predpattern(sys_args):
         if ppatt:
             yield slabel, parse, ppatt
 
+def highlight_sentence(sent_tokens, pred, colors):
+    def highlight(tokens, color):
+        if len(tokens) == 0:
+            return None
+        last_index = -1
+        for tk in tokens:
+            index = tk.position
+            text = sent_tokens[index]
+            if last_index == -1:
+                sent_tokens[index] = '<span style=\\"background-color:%s\\">%s'%(color, text)
+            else:
+                span = index - last_index
+                if span != 1:
+                    sent_tokens[last_index] += '</span>'
+                    sent_tokens[index] = '<span style=\\"background-color:%s\\">%s'%(color, text)
+            last_index = index
+        sent_tokens[last_index] += '</span>'
+
+    if pred.type != 'poss':
+        highlight(pred.tokens, colors['pred'])
+    for arg_i, arg in enumerate(sorted(pred.arguments)):
+        arg_i = arg_i%len(colors['arg'])
+        highlight(arg.tokens, colors['arg'][arg_i])
+
+    return ' '.join(sent_tokens)
+
+def format_pred(pred, colors):
+    ret = []
+    args = pred.arguments
+    corpula = '<span style=\\"background-color:%s\\">is/are</span>'%(colors['special'])
+
+    if pred.type in {'poss'}:
+        poss = '<span style=\\"background-color:%s\\">has/have</span>'%(colors['special'])
+        return ' '.join([pred.arguments[0].name, poss, pred.arguments[1].name])
+
+    if pred.type in {'amod', 'appos'}:
+        # Special handling for `amod` and `appos` because the target
+        # relation `is/are` deviates from the original word order.
+        arg0 = None
+        other_args = []
+        for arg in pred.arguments:
+            if arg.root == pred.root.gov:
+                arg0 = arg
+            else:
+                other_args.append(arg)
+        if arg0 is not None:
+            ret = [arg0.name, corpula]
+            args = other_args
+        else:
+            ret = [args[0].name, corpula]
+            args = args[1:]
+
+    # Mix arguments with predicate tokens. Use word order to derive a
+    # nice-looking name.
+    last_pred_token_pos, last_pred_token_index = -1, -1
+    for idx, y in enumerate(sorted(pred.tokens + args)):
+        if isinstance(y, Argument):
+            ret.append(y.name)
+            if (pred.root.gov_rel == 'xcomp' and
+                pred.root.tag not in {'VERB', 'ADJ', 'JJ'} and
+                idx == 0):
+                ret.append(corpula)
+        else:
+            text = html_escape(y.text)
+            if last_pred_token_pos == -1:
+                text = '<span style=\\"background-color:%s\\">%s'%(colors['pred'], text)
+                ret.append(text)
+            else:
+                if y.position-last_pred_token_pos != 1:
+                    ret[last_pred_token_index] += '</span>'
+                    text = '<span style=\\"background-color:%s\\">%s'%(colors['pred'], text)
+                    ret.append(text)
+                else:
+                    ret.append(text)
+            last_pred_token_pos = y.position
+            last_pred_token_index = len(ret)-1
+    ret[last_pred_token_index] += '</span>'
+    return ' '.join(ret)
+
+def arg_format(pred, arg, arg_i, colors):
+    something = '<span style=\\"background-color:%s\\">SOMETHING</span>'%(colors['special'])
+    arg_phrase = html_escape(' '.join(tk.text for tk in arg.tokens))
+    arg_phrase = '<span style=\\"background-color:%s\\">%s</span>'%(colors['arg'][arg_i], arg_phrase)
+    if (arg.root.gov_rel in {'ccomp', 'csubj', 'xcomp'}
+        and arg.root.gov in pred.tokens and pred.type == 'normal'):
+        s = something + ' := ' + arg_phrase
+    else:
+        s = arg_phrase
+    return s
+
 def extract():
+    arg_color_list = ['#eeda6e', '#ff751a', '#00cc99', '00b33c', '#99b3ff', '#ff3333']
+    colors = {'pred': '#dab3ff', 'arg': arg_color_list, 'special':'#ffffff'}
     sys_args = parse_args()
     f = open(sys_args.output, 'wb')
     writer = csv.writer(f, delimiter=',', quoting=csv.QUOTE_ALL)
@@ -54,33 +146,29 @@ def extract():
     for slabel, parse, ppatt in extract_predpattern(sys_args):
         if row_i > 10:
             break
-        entails = {}
-        entails['sentence'] = html_escape(' '.join([tk.text for tk in ppatt.tokens]))
-        entails['sentenceID'] = slabel
-        entail_i = 0
+        tokens = [html_escape(tk.text) for tk in ppatt.tokens]
         for pred in ppatt.instances:
-            item_list = []
-            for item in sorted(pred.tokens+pred.arguments):
-                if isinstance(item, Argument):
-                    if (item.root.gov_rel in {'ccomp', 'csubj', 'xcomp'}
-                        and item.root.gov in pred.tokens and pred.type == 'normal'):
-                        break
-                    elif item.root.tag in {'DET', 'PROP', 'DT', 'WDT', 'PDT', 'EX', 'PRP'}:
-                        break
-                    item_list.append(' '.join([tk.text for tk in item.tokens]))
-                else:
-                    item_list.append(item.text)
-            else:
-                item_list[0] = item_list[0][0].upper() + item_list[0][1:]
-                entail_i += 1
-                entail = html_escape(' '.join(item_list))
-                entails['entail_'+str(entail_i)] = entail
-        if len(entails) > 2:
+            entails = {}
+            hl_sent = highlight_sentence(tokens[:], pred, colors)
+            if hl_sent == None:
+                continue
+            entails['questionID'] = 'q_%d'%(len(row)+1)
+            entails['sentenceID'] = slabel
+            entails['sentences'] = hl_sent
+            entails['pred_id'] = '%s_%d'%(pred.type, pred.root.position)
+            entails['predicate'] = '<div class=\\"statement_for_predicate\\">'
+            entails['predicate'] += """<span style=\\"font-weight:normal;\\">Predicate:&nbsp;&nbsp;</span> """
+            entails['predicate'] += format_pred(pred, colors) + '</div>'
+            for arg_i, arg in enumerate(sorted(pred.arguments)):
+                arg_i = arg_i%len(colors['arg'])
+                entails['predicate'] += '<div class=\\"statement_for_argument\\">'
+                entails['predicate'] += '<span style=\\"font-weight:normal;\\">%s:&nbsp;&nbsp;</span> '%(arg.name)
+                entails['predicate'] += arg_format(pred, arg, arg_i, colors) + '</div>'
             row.append(entails)
-        if len(row) == 5:
-            writer.writerow([json.dumps(row, sort_keys=True)])
-            row_i += 1
-            row = []
+            if len(row) == 5:
+                writer.writerow([json.dumps(row, sort_keys=True)])
+                row_i += 1
+                row = []
     f.close()
 
 

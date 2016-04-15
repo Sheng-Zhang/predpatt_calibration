@@ -64,8 +64,8 @@ def sample(k, filepath, output):
 
 def multi_sample(k, fl, path, out, mod):
     for i, filename in enumerate(open(fl), 1):
-        if i%20 != mod:
-            continue
+        # if i%20 != mod:
+        #     continue
         filename = filename.strip()
         filepath = os.path.join(path, filename)
         name = filename.split('.')[0]
@@ -99,7 +99,7 @@ def sub_sample(n, count_file, path):
         ret += temp
     random.shuffle(ret)
     print len(ret)
-    print '\n\n'.join(ret[:n])
+    # print '\n\n'.join(ret[:n])
 
 
 def test(l, k):
@@ -112,15 +112,15 @@ def test(l, k):
 
 if __name__ == '__main__':
     sys.stdout  = codecs.getwriter('utf8')(sys.stdout)
-    n, count_file, path = sys.argv[1:]
-    sub_sample(int(n), count_file, path)
+    # n, count_file, path = sys.argv[1:]
+    # sub_sample(int(n), count_file, path)
 
     # k, filepath, output = sys.argv[1:]
     # sample(int(k), filepath, output)
 
-    # k, filelist, path, out, mod = sys.argv[1:]
-    # start_time = timeit.default_timer()
-    # multi_sample(int(k), filelist, path, out, int(mod))
-    # end_time = timeit.default_timer()
-    # print "\nTotal Time elasped: %.2fm"%((end_time-start_time)/60.)
+    k, filelist, path, out, mod = sys.argv[1:]
+    start_time = timeit.default_timer()
+    multi_sample(int(k), filelist, path, out, int(mod))
+    end_time = timeit.default_timer()
+    print "\nTotal Time elasped: %.2fm"%((end_time-start_time)/60.)
 
