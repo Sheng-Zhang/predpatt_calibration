@@ -5,7 +5,7 @@ import csv, json
 import argparse
 from predpatt.Predpattern import Predpattern, Argument
 from predpatt import CommUtil
-from converter import html_escape
+from converter import html_escape, ptb2text
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -41,6 +41,7 @@ def parse_args():
 
 def extract_predpattern(sys_args):
     for slabel, parse in CommUtil.load_conllu(sys_args.filename):
+        parse.tokens = ptb2text(' '.join(parse.tokens)).split(' ')
         ppatt = Predpattern(parse, sys_args)
         if ppatt:
             yield slabel, parse, ppatt
@@ -54,12 +55,16 @@ def highlight_sentence(sent_tokens, pred, colors):
             index = tk.position
             text = sent_tokens[index]
             if last_index == -1:
-                sent_tokens[index] = '<span style=\\"background-color:%s\\">%s'%(color, text)
+                sent_tokens[index] = ('<span id=\\"rcorner\\" style=\\"'
+                                      'background-color:%s\\">%s'
+                                      %(color, text))
             else:
                 span = index - last_index
                 if span != 1:
                     sent_tokens[last_index] += '</span>'
-                    sent_tokens[index] = '<span style=\\"background-color:%s\\">%s'%(color, text)
+                    sent_tokens[index] = ('<span id=\\"rcorner\\" style=\\"'
+                                          'background-color:%s\\">%s'
+                                          %(color, text))
             last_index = index
         sent_tokens[last_index] += '</span>'
 
@@ -71,14 +76,25 @@ def highlight_sentence(sent_tokens, pred, colors):
 
     return ' '.join(sent_tokens)
 
-def format_pred(pred, colors):
+def format_pred(pred, colors, placeholder):
     ret = []
     args = pred.arguments
-    corpula = '<span style=\\"background-color:%s\\">is/are</span>'%(colors['special'])
+    corpula = ('<span id=\\"rcorner\\" style=\\"background-color:%s\\">'
+               'is/are</span>'%(colors['special']))
 
     if pred.type in {'poss'}:
-        poss = '<span style=\\"background-color:%s\\">has/have</span>'%(colors['special'])
-        return ' '.join([pred.arguments[0].name, poss, pred.arguments[1].name])
+        poss = ('<span id=\\"rcorner\\" style=\\"background-color:%s\\">'
+                'has/have</span>'%(colors['special']))
+        if placeholder:
+            ret = ' '.join([pred.arguments[0].name, poss,
+                            pred.arguments[1].name])
+        else:
+            arg_0 = format_arg(pred, pred.arguments[0], 0, colors)
+            arg_1 = format_arg(pred, pred.arguments[1], 1, colors)
+            ret = ' '.join([arg_0, poss, arg_1])
+        return ret
+
+    arg_i = 0 # Count for current argument.
 
     if pred.type in {'amod', 'appos'}:
         # Special handling for `amod` and `appos` because the target
@@ -91,18 +107,27 @@ def format_pred(pred, colors):
             else:
                 other_args.append(arg)
         if arg0 is not None:
-            ret = [arg0.name, corpula]
+            arg_0 = arg0.name if placeholder else format_arg(pred, arg0, 0, colors)
+            ret = [arg_0, corpula]
             args = other_args
         else:
-            ret = [args[0].name, corpula]
+            arg_0 = args[0].name if placeholder else format_arg(pred, args[0], 0, colors)
+            ret = [arg_0, corpula]
             args = args[1:]
+
+        arg_i += 1
 
     # Mix arguments with predicate tokens. Use word order to derive a
     # nice-looking name.
     last_pred_token_pos, last_pred_token_index = -1, -1
     for idx, y in enumerate(sorted(pred.tokens + args)):
         if isinstance(y, Argument):
-            ret.append(y.name)
+            if placeholder:
+                arg = y.name
+            else:
+                arg = format_arg(pred, y, arg_i, colors)
+                arg_i += 1
+            ret.append(arg)
             if (pred.root.gov_rel == 'xcomp' and
                 pred.root.tag not in {'VERB', 'ADJ', 'JJ'} and
                 idx == 0):
@@ -110,12 +135,14 @@ def format_pred(pred, colors):
         else:
             text = html_escape(y.text)
             if last_pred_token_pos == -1:
-                text = '<span style=\\"background-color:%s\\">%s'%(colors['pred'], text)
+                text = ('<span id=\\"rcorner\\" style=\\"'
+                        'background-color:%s\\">%s'%(colors['pred'], text))
                 ret.append(text)
             else:
                 if y.position-last_pred_token_pos != 1:
                     ret[last_pred_token_index] += '</span>'
-                    text = '<span style=\\"background-color:%s\\">%s'%(colors['pred'], text)
+                    text = ('<span id=\\"rcorner\\" style=\\"background'
+                            '-color:%s\\">%s'%(colors['pred'], text))
                     ret.append(text)
                 else:
                     ret.append(text)
@@ -124,10 +151,12 @@ def format_pred(pred, colors):
     ret[last_pred_token_index] += '</span>'
     return ' '.join(ret)
 
-def arg_format(pred, arg, arg_i, colors):
-    something = '<span style=\\"background-color:%s\\">SOMETHING</span>'%(colors['special'])
+def format_arg(pred, arg, arg_i, colors):
+    something = ('<span id=\\"rcorner\\" style=\\"background-color:%s\\">'
+                 'SOMETHING</span>'%(colors['special']))
     arg_phrase = html_escape(' '.join(tk.text for tk in arg.tokens))
-    arg_phrase = '<span style=\\"background-color:%s\\">%s</span>'%(colors['arg'][arg_i], arg_phrase)
+    arg_phrase = ('<span id=\\"rcorner\\" style=\\"background-color:%s\\">'
+                  '%s</span>'%(colors['arg'][arg_i], arg_phrase))
     if (arg.root.gov_rel in {'ccomp', 'csubj', 'xcomp'}
         and arg.root.gov in pred.tokens and pred.type == 'normal'):
         s = something + ' := ' + arg_phrase
@@ -136,16 +165,15 @@ def arg_format(pred, arg, arg_i, colors):
     return s
 
 def extract():
-    arg_color_list = ['#eeda6e', '#ff751a', '#00cc99', '00b33c', '#99b3ff', '#ff3333']
+    arg_color_list = ['#fb8072','#ffffb3','#8dd3c7',
+                      '#80b1d3','#fdb462','#b3de69']
     colors = {'pred': '#dab3ff', 'arg': arg_color_list, 'special':'#ffffff'}
     sys_args = parse_args()
     f = open(sys_args.output, 'wb')
     writer = csv.writer(f, delimiter=',', quoting=csv.QUOTE_ALL)
-    writer.writerow(['json_variables'])
+    writer.writerow(['hit_id', 'json_variables'])
     row_i, row= 0, []
     for slabel, parse, ppatt in extract_predpattern(sys_args):
-        if row_i > 10:
-            break
         tokens = [html_escape(tk.text) for tk in ppatt.tokens]
         for pred in ppatt.instances:
             entails = {}
@@ -157,17 +185,11 @@ def extract():
             entails['sentences'] = hl_sent
             entails['pred_id'] = '%s_%d'%(pred.type, pred.root.position)
             entails['predicate'] = '<div class=\\"statement_for_predicate\\">'
-            entails['predicate'] += """<span style=\\"font-weight:normal;\\">Predicate:&nbsp;&nbsp;</span> """
-            entails['predicate'] += format_pred(pred, colors) + '</div>'
-            for arg_i, arg in enumerate(sorted(pred.arguments)):
-                arg_i = arg_i%len(colors['arg'])
-                entails['predicate'] += '<div class=\\"statement_for_argument\\">'
-                entails['predicate'] += '<span style=\\"font-weight:normal;\\">%s:&nbsp;&nbsp;</span> '%(arg.name)
-                entails['predicate'] += arg_format(pred, arg, arg_i, colors) + '</div>'
+            entails['predicate'] += format_pred(pred, colors, False) + '</div>'
             row.append(entails)
             if len(row) == 5:
-                writer.writerow([json.dumps(row, sort_keys=True)])
                 row_i += 1
+                writer.writerow([row_i, json.dumps(row, sort_keys=True)])
                 row = []
     f.close()
 
