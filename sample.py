@@ -3,6 +3,7 @@
 
 import sys, os, timeit
 import random
+import numpy as np
 import codecs
 from concrete.util.file_io import CommunicationReader
 from predpatt import CommUtil
@@ -59,7 +60,6 @@ def dump(r, output):
 def sample(k, filepath, output):
     l = gen_comm(filepath)
     r = reservoir_sample(l, k)
-    # r = test(l, k)
     dump(r, output)
 
 def multi_sample(k, fl, path, out, mod):
@@ -79,48 +79,52 @@ def multi_sample(k, fl, path, out, mod):
         print ''
         sys.stdout.flush()
 
-def sub_sample(n, count_file, path):
+def sub_sample(n, count_file, files_dir):
+    """
+    Draw samples from a multinomial distribution based on the
+    sentence count in each file.
+    """
+    n = int(n)
+    # extract filenames and sentence counts
     count = (l.strip().split('\t') for l in open(count_file))
     count = {k:int(v) for k, v in count}
-    total, aggre_c  = sum(count.itervalues()), 0
-    ret = []
-    for f, sent_c in count.iteritems():
-        filename = f.split('.')[0]
-        # if i == len(count):
-        #     sample_c = n - aggre_c
-        # else:
-        #     sample_c = int((sent_c/total+0.)*n)
-        # print >> sys.stderr, filename, sample_c, sent_c
-        # aggre_c += sample_c
-        filepath = os.path.join(path, filename)
-        temp = open(filepath).read().decode('utf-8').split('\n\n')
-        if len(temp) != 1000:
-            print >> sys.stderr, filename, len(temp)
-        ret += temp
-    random.shuffle(ret)
-    print len(ret)
-    # print '\n\n'.join(ret[:n])
+    filenames, counts = zip(*count.iteritems())
 
+    # calculate probability distribution
+    total = sum(count.itervalues())
+    pvals = np.asarray(counts, dtype=np.float32)/total
 
-def test(l, k):
-    ret = []
-    for i, item in enumerate(l):
-        if i > k:
-            break
-        ret.append(item)
-    return ret
+    # draw count of each sample
+    ret = np.random.multinomial(n, pvals, size=1)
+
+    # sample n_sample sentences from each file
+    results = []
+    for filename, n_sample in zip(filenames, ret[0]):
+        if n_sample == 0:
+            continue
+        filepath = os.path.join(files_dir, filename.split('.')[0])
+        with open(filepath) as f:
+            sentences = f.read().decode('utf-8').split('\n\n')
+            results += random.sample(sentences, n_sample)
+    print '\n\n'.join(results)
+
+def sample_from_udbank(n, filepath):
+    n = int(n)
+    sentences = open(filepath).read().split('\n\n')
+    results = random.sample(sentences, n)
+    print '\n\n'.join(results)
 
 if __name__ == '__main__':
     sys.stdout  = codecs.getwriter('utf8')(sys.stdout)
-    # n, count_file, path = sys.argv[1:]
-    # sub_sample(int(n), count_file, path)
+    # sub_sample(*sys.argv[1:])
+    sample_from_udbank(*sys.argv[1:])
 
     # k, filepath, output = sys.argv[1:]
     # sample(int(k), filepath, output)
 
-    k, filelist, path, out, mod = sys.argv[1:]
-    start_time = timeit.default_timer()
-    multi_sample(int(k), filelist, path, out, int(mod))
-    end_time = timeit.default_timer()
-    print "\nTotal Time elasped: %.2fm"%((end_time-start_time)/60.)
+    # k, filelist, path, out, mod = sys.argv[1:]
+    # start_time = timeit.default_timer()
+    # multi_sample(int(k), filelist, path, out, int(mod))
+    # end_time = timeit.default_timer()
+    # print "\nTotal Time elasped: %.2fm"%((end_time-start_time)/60.)
 
