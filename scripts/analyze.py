@@ -93,10 +93,10 @@ def load_result(filepath):
     return results
 
 def stratify_results(results):
-    ret = {5:[], 4:[], 3:[]}
+    ret = {5:[], 4:[], 3:[], 2:[], 1:[], 0:[]}
     for sent in results.itervalues():
         for pred, distr, _ in sent.gen_answers():
-            ret[max(distr)].append(pred.question)
+            ret[distr[1]].append(pred.question)
     for k, v in ret.iteritems():
         print k, len(v)
     with open('stratified.csv', 'wb') as f:
@@ -130,7 +130,7 @@ def main(filepath):
     results = load_result(filepath)
     # from plot import boxplot
     # boxplot(results)
-    # stratify_results(results)
+    stratify_results(results)
     cal_fleiss_kappa(results)
     cal_cohen_kappa(results)
 
