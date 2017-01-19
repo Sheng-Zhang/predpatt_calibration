@@ -15,3 +15,7 @@ git clone https://github.com/sheng-z/predpatt_calibration.git
 cd predpatt_calibration
 python scripts/gen_hits.py samples/en_sample.conllu hits.csv
 ```
+
+Example CoNLL files are in `samples`.
+
+Example csv files are in `data/multi_lang_hits`.
