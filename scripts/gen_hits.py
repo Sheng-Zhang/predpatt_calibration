@@ -6,7 +6,7 @@ import json
 import argparse
 from predpatt.Predpattern import Predpattern, Argument, PredpattOpts
 from predpatt import CommUtil
-from converter import html_escape, ptb2text
+from utils import html_escape, ptb2text
 
 arg_color_list = ['#fb8072', '#ffffb3', '#8dd3c7',
                   '#80b1d3', '#fdb462', '#b3de69',
@@ -206,8 +206,8 @@ def extract():
     writer.writerow(['json_variables'])
     row= []
     for slabel, parse, ppatt in extract_predpattern(sys_args):
-        tokens = [html_escape(tk.text) for tk in ppatt.tokens]
-        sent = ' '.join([tk.text for tk in ppatt.tokens])
+        tokens = [html_escape(tk.text) for tk in ppatt.token]
+        sent = ' '.join([tk.text for tk in ppatt.token])
         for pred in ppatt.instances:
             # only output normal output for now
             if pred.type != 'normal':
