@@ -3,9 +3,9 @@
 ## Prerequisites
 Install a specific commit of PredPatt first.
 ```bash
-git clone https://gitlab.hltcoe.jhu.edu/extraction/PredPatt.git
-git checkout ef31ebd3cf7f50fd7fdb73eb9b4fb4771d09af99
-pip install .
+git clone https://github.com/hltcoe/PredPatt.git
+cd PredPatt
+pip install . --upgrade
 ```
 
 ## HIT Data Generation (csv files)
