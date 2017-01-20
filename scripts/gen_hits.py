@@ -4,9 +4,9 @@
 import csv
 import json
 import argparse
-from predpatt.Predpattern import Predpattern, Argument, PredpattOpts
-from predpatt import CommUtil
-from utils import html_escape, ptb2text
+from predpatt.patt import PredPatt, Argument, PredPattOpts
+from utils import html_escape, ptb2text, load_conllu
+
 
 arg_color_list = ['#fb8072', '#ffffb3', '#8dd3c7',
                   '#80b1d3', '#fdb462', '#b3de69',
@@ -14,7 +14,7 @@ arg_color_list = ['#fb8072', '#ffffb3', '#8dd3c7',
 COLORS = {'pred': '#dab3ff', 'arg': arg_color_list, 'special': '#ffffff'}
 corpula = ('<span id=\\"rcorner\\" style=\\"background-color:%s\\">'
            'is/are</span>' %(COLORS['special']))
-opts = PredpattOpts(simple=False,
+opts = PredPattOpts(simple=False,
                     cut=False,
                     resolve_relcl=True,
                     resolve_amod=True,
@@ -34,9 +34,9 @@ def parse_args():
 
 
 def extract_predpattern(sys_args):
-    for slabel, parse in CommUtil.load_conllu(sys_args.filename):
+    for slabel, parse in load_conllu(sys_args.filename):
         parse.tokens = ptb2text(' '.join(parse.tokens)).split(' ')
-        ppatt = Predpattern(parse, opts=opts)
+        ppatt = PredPatt(parse, opts=opts)
         if ppatt:
             yield slabel, parse, ppatt
 
