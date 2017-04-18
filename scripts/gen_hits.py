@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 # encoding: utf-8
 
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
+
 import csv
 import json
 import argparse
+from collections import OrderedDict
 from predpatt.patt import PredPatt, Argument, PredPattOpts
 from utils import html_escape, ptb2text, load_conllu
 
@@ -35,7 +40,6 @@ def parse_args():
 
 def extract_predpattern(sys_args):
     for slabel, parse in load_conllu(sys_args.filename):
-        parse.tokens = ptb2text(' '.join(parse.tokens)).split(' ')
         ppatt = PredPatt(parse, opts=opts)
         if ppatt:
             yield slabel, parse, ppatt
@@ -59,7 +63,8 @@ def highlight_sentence(sent_tokens, pred):
                                       %(color, text))
             else:
                 span = index - last_index
-                if span != 1:
+                # Index could be float.
+                if span > 1:
                     sent_tokens[last_index] += '</span>'
                     sent_tokens[index] = ('<span id=\\"rcorner\\" style=\\"'
                                           'background-color:%s\\">%s'
@@ -73,7 +78,7 @@ def highlight_sentence(sent_tokens, pred):
         arg_i = arg_i % len(COLORS['arg'])
         highlight(arg.tokens, COLORS['arg'][arg_i])
 
-    return ' '.join(sent_tokens)
+    return ' '.join([tk for i, tk in sent_tokens.iteritems() if i != -1])
 
 
 def format_poss(pred, placeholder):
@@ -132,6 +137,7 @@ def format_pred(pred, placeholder):
     # Mix arguments with predicate tokens. Use word order to derive a
     # nice-looking name.
     last_pred_token_pos, last_pred_token_index = -1, -1
+    last_token_type = None
     for idx, y in enumerate(sort_by_position(pred.tokens + args)):
         if isinstance(y, Argument):
             if placeholder:
@@ -140,6 +146,7 @@ def format_pred(pred, placeholder):
                 arg = format_arg(pred, y, arg_i)
                 arg_i += 1
             ret.append(arg)
+            last_token_type = "Argument"
             # TODO: explain the following condition
             # if (pred.root.gov_rel == 'xcomp' and
             #     pred.root.tag not in {'VERB', 'ADJ', 'JJ'} and
@@ -153,7 +160,7 @@ def format_pred(pred, placeholder):
                         'background-color:%s\\">%s' %(COLORS['pred'], text))
                 ret.append(text)
             else:
-                if y.position - last_pred_token_pos != 1:
+                if last_token_type == "Argument":
                     # if there's argument in between
                     # add html code to end the span
                     ret[last_pred_token_index] += '</span>'
@@ -163,6 +170,7 @@ def format_pred(pred, placeholder):
                     ret.append(text)
                 else:
                     ret.append(text)
+            last_token_type = "Predicate"
             last_pred_token_pos = y.position
             last_pred_token_index = len(ret) - 1
     ret[last_pred_token_index] += '</span>'
@@ -206,14 +214,14 @@ def extract():
     writer.writerow(['json_variables'])
     row= []
     for slabel, parse, ppatt in extract_predpattern(sys_args):
-        tokens = [html_escape(tk.text) for tk in ppatt.token]
-        sent = ' '.join([tk.text for tk in ppatt.token])
+        sent = ' '.join([tk.text for _id, tk in ppatt.token.items() if isinstance(_id, int)])
         for pred in ppatt.instances:
             # only output normal output for now
             if pred.type != 'normal':
                 continue
             # highlight argument phrases and return the whole sentence str
-            html_sent = highlight_sentence(tokens[:], pred)
+            tokens = OrderedDict([(_id, html_escape(tk.text)) for _id, tk in ppatt.token.items()])
+            html_sent = highlight_sentence(tokens, pred)
             if html_sent is None:
                 continue
             # create an element for a hit quesiton
@@ -223,6 +231,8 @@ def extract():
             if len(row) == 5:
                 writer.writerow([json.dumps(row, sort_keys=True)])
                 row = []
+    if len(row):
+        writer.writerow([json.dumps(row, sort_keys=True)])
     f.close()
 
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # encoding: utf-8
 import codecs
+from collections import OrderedDict
 from predpatt.UDParse import DepTriple, UDParse
 
 html_escape_table = {
@@ -55,14 +56,27 @@ def load_conllu(filename):
                         if not has_sent_id:   # don't take subsequent comments as sent_id
                             sent_id = line[1:].strip()
                     continue
-                line = line.split('\t') # data appears to use '\t'
-                if '-' in line[0]:      # skip multi-tokens, e.g., on Spanish UD bank
+                line = line.split() # data appears to use '\t'
+                if '-' in line[0]:  # skip multi-tokens, e.g., on Spanish UD bank
                     continue
                 assert len(line) == 10, line
                 lines.append(line)
-            [_, tokens, _, tags, _, _, gov, gov_rel, _, _] = zip(*lines)
-            triples = [DepTriple(rel, int(gov)-1, dep) for dep, (rel, gov) in enumerate(zip(gov_rel, gov))]
-            parse = UDParse(list(tokens), tags, triples)
+            [ids, tokens, _, tags, _, _, gov, gov_rel, deps, _] = zip(*lines)
+            triples = []
+            id2token = [(-1, "ROOT")]
+            id2tag = [(-1, "ROOT")]
+            for _id, token, tag, gov, deprel, dep in zip(ids, tokens, tags, gov, gov_rel, deps):
+                if ":" in dep:
+                    # Use enhanced dep
+                    gov, deprel = dep.split(":", 1)
+                gov = int(gov) if gov.isdigit() else float(gov)
+                _id = int(_id) if _id.isdigit() else float(_id)
+                triples.append(DepTriple(deprel, gov - 1, _id - 1))
+                id2token.append((_id - 1, token))
+                id2tag.append((_id - 1, tag))
+            tokens = OrderedDict(id2token)
+            tags = OrderedDict(id2tag)
+            parse = UDParse(tokens, tags, triples)
             yield sent_id, parse
             sent_num += 1
 
