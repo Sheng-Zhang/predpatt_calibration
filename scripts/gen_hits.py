@@ -5,6 +5,10 @@ import csv
 import json
 import argparse
 from predpatt.patt import PredPatt, Argument, PredPattOpts
+try:
+    from predpatt.util.linear import construct_pred_from_flat
+except:
+    construct_pred_from_flat = False
 from utils import html_escape, ptb2text, load_conllu
 
 
@@ -29,16 +33,45 @@ def parse_args():
                         help='path to the input file. Accepts Concrete communications and CoNLLU formats.')
     parser.add_argument('output',
                         help='output')
+    parser.add_argument('--reference', nargs='?', const="", type=str,
+                        help='path to the reference file, when the input file is in the linear format.')
     args = parser.parse_args()
     return args
 
 
-def extract_predpattern(sys_args):
+def extract_predpattern(sys_args, ft="conll"):
+    if ft == "conll":
+        for y in extract_pp_from_conll(sys_args):
+            yield y
+    else:
+        if construct_pred_from_flat:
+            for y in extract_pp_from_linear(sys_args):
+                yield y
+
+def extract_pp_from_conll(sys_args):
     for slabel, parse in load_conllu(sys_args.filename):
         parse.tokens = ptb2text(' '.join(parse.tokens)).split(' ')
         ppatt = PredPatt(parse, opts=opts)
+        sent = " ".join([t.text for t in ppatt.token])
         if ppatt:
-            yield slabel, parse, ppatt
+            yield slabel, sent, ppatt.instances
+
+
+def extract_pp_from_linear(sys_args):
+    sent_list = open(sys_args.reference).read().strip().split("\n")
+    linear_list = open(sys_args.filename).read().strip().split("\n")
+    assert len(sent_list) == len(linear_list)
+    count = 0
+    for i in xrange(len(sent_list)):
+        sent = sent_list[i]
+        linear = linear_list[i]
+        try:
+            predicates = construct_pred_from_flat(linear.split())
+        except:
+            continue
+        count += 1
+        yield "mt/ie-%d" % (i+1), sent, predicates
+    print "processed: %d / %d" %(count, len(sent_list))
 
 
 def highlight_sentence(sent_tokens, pred):
@@ -201,19 +234,22 @@ def create_a_hit_element(qid, slabel, sent, html_sent, pred):
 
 def extract():
     sys_args = parse_args()
+    ft = "conll" if sys_args.reference is None else "linear"
     f = open(sys_args.output, 'wb')
     writer = csv.writer(f, delimiter=',', quoting=csv.QUOTE_ALL)
     writer.writerow(['json_variables'])
     row= []
-    for slabel, parse, ppatt in extract_predpattern(sys_args):
-        tokens = [html_escape(tk.text) for tk in ppatt.token]
-        sent = ' '.join([tk.text for tk in ppatt.token])
-        for pred in ppatt.instances:
+    for slabel, sent, instances in extract_predpattern(sys_args, ft):
+        tokens = [html_escape(text) for text in sent.split()]
+        for pred in instances:
             # only output normal output for now
             if pred.type != 'normal':
                 continue
             # highlight argument phrases and return the whole sentence str
-            html_sent = highlight_sentence(tokens[:], pred)
+            if ft == "conll":
+                html_sent = highlight_sentence(tokens[:], pred)
+            else:
+                html_sent = " ".join(tokens)
             if html_sent is None:
                 continue
             # create an element for a hit quesiton
