@@ -198,7 +198,7 @@ def format_pred(pred, placeholder):
                     ret.append(text)
                 else:
                     ret.append(text)
-                last_token_type = "Predicate"
+            last_token_type = "Predicate"
             last_pred_token_pos = y.position
             last_pred_token_index = len(ret) - 1
     ret[last_pred_token_index] += '</span>'
