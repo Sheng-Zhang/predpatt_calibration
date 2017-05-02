@@ -75,7 +75,7 @@ def extract_pp_from_linear(sys_args):
 
 
 def highlight_sentence(sent_tokens, pred):
-    def highlight(tokens, color):
+    def highlight(tokens, style):
         """
         Add html code to highlight specific *tokens* with specific
         *color* in sent_tokens.
@@ -88,23 +88,25 @@ def highlight_sentence(sent_tokens, pred):
             text = sent_tokens[index]
             if last_index == -1:
                 sent_tokens[index] = ('<span id=\\"rcorner\\" style=\\"'
-                                      'background-color:%s\\">%s'
-                                      %(color, text))
+                                      '%s\\">%s'
+                                      %(style, text))
             else:
                 span = index - last_index
                 if span != 1:
                     sent_tokens[last_index] += '</span>'
                     sent_tokens[index] = ('<span id=\\"rcorner\\" style=\\"'
-                                          'background-color:%s\\">%s'
-                                          %(color, text))
+                                          '%s\\">%s'
+                                          %(style, text))
             last_index = index
         sent_tokens[last_index] += '</span>'
 
     if pred.type != 'poss':
-        highlight(pred.tokens, COLORS['pred'])
+        style = "width:100px;height:100px;padding:1px;border:5px solid %s;" %COLORS['pred']
+        highlight(pred.tokens, style)
     for arg_i, arg in enumerate(sort_by_position(pred.arguments)):
         arg_i = arg_i % len(COLORS['arg'])
-        highlight(arg.tokens, COLORS['arg'][arg_i])
+        style = "background-color:%s" %COLORS['arg'][arg_i]
+        highlight(arg.tokens, style)
 
     return ' '.join(sent_tokens)
 
@@ -185,7 +187,8 @@ def format_pred(pred, placeholder):
             if last_pred_token_pos == -1:
                 # add html code to the first token of the predicate
                 text = ('<span id=\\"rcorner\\" style=\\"'
-                        'background-color:%s\\">%s' %(COLORS['pred'], text))
+                        'width:100px;height:100px;padding:1px;border:5px'
+                        ' solid %s;\\">%s' %(COLORS['pred'], text))
                 ret.append(text)
             else:
                 if last_token_type == "Argument":
@@ -193,8 +196,9 @@ def format_pred(pred, placeholder):
                     # add html code to end the span
                     ret[last_pred_token_index] += '</span>'
                     # add html code to start a new span
-                    text = ('<span id=\\"rcorner\\" style=\\"background'
-                            '-color:%s\\">%s' %(COLORS['pred'], text))
+                    text = ('<span id=\\"rcorner\\" style=\\"'
+                            'width:100px;height:100px;padding:1px;border:5px'
+                            ' solid %s;\\">%s' %(COLORS['pred'], text))
                     ret.append(text)
                 else:
                     ret.append(text)
