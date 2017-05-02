@@ -165,6 +165,7 @@ def format_pred(pred, placeholder):
     # Mix arguments with predicate tokens. Use word order to derive a
     # nice-looking name.
     last_pred_token_pos, last_pred_token_index = -1, -1
+    last_token_type = None
     for idx, y in enumerate(sort_by_position(pred.tokens + args)):
         if isinstance(y, Argument):
             if placeholder:
@@ -173,6 +174,7 @@ def format_pred(pred, placeholder):
                 arg = format_arg(pred, y, arg_i)
                 arg_i += 1
             ret.append(arg)
+            last_token_type = "Argument"
             # TODO: explain the following condition
             # if (pred.root.gov_rel == 'xcomp' and
             #     pred.root.tag not in {'VERB', 'ADJ', 'JJ'} and
@@ -186,7 +188,7 @@ def format_pred(pred, placeholder):
                         'background-color:%s\\">%s' %(COLORS['pred'], text))
                 ret.append(text)
             else:
-                if y.position - last_pred_token_pos != 1:
+                if last_token_type == "Argument":
                     # if there's argument in between
                     # add html code to end the span
                     ret[last_pred_token_index] += '</span>'
@@ -196,6 +198,7 @@ def format_pred(pred, placeholder):
                     ret.append(text)
                 else:
                     ret.append(text)
+                last_token_type = "Predicate"
             last_pred_token_pos = y.position
             last_pred_token_index = len(ret) - 1
     ret[last_pred_token_index] += '</span>'
